@@ -1,0 +1,205 @@
+##
+## >>> Create a Namespace to deploy the Namespace Creation Bot inside
+##
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitor-namespaces-bot-ns
+---
+##
+## >>> Create a ServiceAccount that the BOT will run under.
+##
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitor-namespaces-bot-sa
+  namespace: monitor-namespaces-bot-ns
+---
+##
+## >>> Create a ClusterRole for UserAdmins to create namespaces
+##
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: ns-admin
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - create
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - get
+  - list
+---
+##
+## >>> Bind this ClusterRole for the userGroup (here k8s-users) allowed to create namespaces
+##
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ns-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ns-admin
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: k8s-admins
+
+##>> bot-ns-admin-clusterrole.yaml
+
+---
+##
+## >>> Create a ClusterRole for providing authorizations to the BOT (NS watch, RoleBinding create...)
+##
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  annotations:
+    rbac.authorization.kubernetes.io/autoupdate: "true"
+  labels:
+    kubernetes.io/bootstrapping: rbac-defaults
+  name: ns-admin-bot
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  verbs:
+  - get
+  - bind
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - get
+  - bind
+---
+##
+## >>> Bind this ClusterRole to the ServiceAccount 
+##
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: monitor-namespaces-bot
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ns-admin-bot
+subjects:
+- kind: ServiceAccount
+  name: monitor-namespaces-bot-sa
+  namespace: monitor-namespaces-bot-ns
+---
+##
+## >>> Create a configMap to configure the bot : Events/ActionsBind 
+##     This CM will be mounted as volume to the running Deployment below
+##
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hooks-operator
+  namespace: monitor-namespaces-bot-ns
+data:
+### this 1st hook binds a clusterrole to a group of users k8s-users
+  ns-hook.sh: |+
+    #!/bin/bash
+    if [[ $1 == "--config" ]] ; then
+      # configuration
+      cat <<EOF
+    {
+      "onKubernetesEvent": [
+        {
+          "kind": "namespace",
+          "event": [ "add" ]
+        }
+      ]
+    }
+    EOF
+    else
+      # response:
+      # find out what namespace has emerged
+      createdNamespace=$(jq -r '.[0].resourceName' $BINDING_CONTEXT_PATH)
+      # create the appropriate authorization in it (here k8s-users group to receive admin clusterrole)
+      kubectl create -n ${createdNamespace} rolebinding  ns-users --clusterrole=admin --group=k8s-users
+    fi
+### this 2nd hook is just for demo, it traps namespace deletion and write a msg in the logs.
+  ns-hook-2.sh: |+
+    #!/bin/bash
+    if [[ $1 == "--config" ]] ; then
+      # configuration
+      cat <<EOF
+    {
+      "onKubernetesEvent": [
+        {
+          "kind": "namespace",
+          "event": [ "delete" ]
+        }
+      ]
+    }
+    EOF
+    else
+      # response:
+      # find out what namespace
+      deletedNamespace=$(jq -r '.[0].resourceName' $BINDING_CONTEXT_PATH)
+      echo "Namespace ${deletedNamespace} just deleted !"
+    fi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Unique key of the Deployment instance
+  name: bot-for-ns
+  namespace: monitor-namespaces-bot-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot-ns
+  template:
+    metadata:
+      labels:
+        # Apply this label to pods and default
+        # the Deployment label selector to this value
+        app: bot-ns
+    spec:
+      containers:
+      - name: ns-creation-hook
+        # Run this image
+        #image: docker.io/jmlambert78/nsbot:latest 
+        image: docker.io/flant/shell-operator:v1.0.0-beta.1-alpine3.9  
+        volumeMounts:
+        - name: config-hooks
+          mountPath: /hooks
+      serviceAccountName: monitor-namespaces-bot-sa
+      volumes:
+        - name: config-hooks
+          configMap:
+            name: hooks-operator
+            defaultMode: 0777
+            ## to indicate that the sh have to be executable
