@@ -6,15 +6,15 @@ Based on https://github.com/flant/shell-operator
 * Replace image rebuild by ConfigMap containing the Event driven scripts
 # Problem to solve :
 we consider that we have 3 usages of the platform
-*	Platform administrator 
-  *	Namespaces to be protected from Customer (trident, prometheus...)
-*	Customer Admins 
-  *	Need to be able to create a NS
-  *	Create Roles/RoleBindings inside this NS
-  *	Allocate a predefined Role to the relevant group(s) users to let them consume it.
-*	Customer Users
-  *	Are provisioned within the AD/LDAP
-  *	Are members of the set of relevant groups as said above.
+* Platform administrator 
+  * Namespaces to be protected from Customer (trident, prometheus...)
+* Customer Admins 
+  * Need to be able to create a NS
+  * Create Roles/RoleBindings inside this NS
+  * Allocate a predefined Role to the relevant group(s) users to let them consume it.
+* Customer Users
+  * Are provisioned within the AD/LDAP
+  * Are members of the set of relevant groups as said above.
 This issue is not easy(possible?) to solve only with RBAC
 
 # Solution based on shell-operator, event watching
