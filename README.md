@@ -58,11 +58,11 @@ data:
     fi
 ```
 ## How to customise ?
-- Edit the ConfigMap above with your specific events & scripts,you may have one or many .sh files there. 
-- look at the original site for explanation on the syntax.https://github.com/flant/shell-operator
-- For the default content, the event is based on Namespace creation.
--- kubectl create testnewns
--- check that the new ns testnewns contains some rolebinding that is injected by the Bot.
+* Edit the ConfigMap above with your specific events & scripts,you may have one or many .sh files there. 
+* look at the original site for explanation on the syntax.https://github.com/flant/shell-operator
+* For the default content, the event is based on Namespace creation.
+** kubectl create testnewns
+** check that the new ns testnewns contains some rolebinding that is injected by the Bot.
 ## How to deploy ?
 ```kubectl apply -f opbot-allinone.yaml```
 
