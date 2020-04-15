@@ -89,4 +89,9 @@ data:
   * check that the new ns testnewns contains some rolebinding that is injected by the Bot.
 ## How to deploy ?
 ```kubectl apply -f op-bot-allinone.yaml```
+## How to test ?
+* For the default content, the event is based on Namespace creation.
+  * kubectl create testnewns
+  * check that the new ns testnewns contains some rolebinding that is injected by the Bot.
+  * You may have a look to the logs of the pod.
 
